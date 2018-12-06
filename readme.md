@@ -1,4 +1,9 @@
 # plc 2.0
+
+this repo contains few minor patches needed to build plc2.0 with recent Intel compilers.
+Original can be downloaded here:
+https://wiki.cosmos.esa.int/planckpla/index.php/CMB_spectrum_%26_Likelihood_Code
+
 (4 July 2015 version)
 
 ``plc`` is the public Planck Likelihood Code.  It provides C and Fortran 
