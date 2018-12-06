@@ -53,7 +53,7 @@ def ifort_conf(ctx):
     ctx.env.LINKFLAGS_fcshlib = ['-dynamiclib']
   ctx.env.append_value('FCFLAGS',ctx.env.mopt)
   ctx.env["FCFLAGS_fc_omp"]=[]
-  ctx.env.append_value("FCFLAGS_fc_omp","-openmp")
+  ctx.env.append_value("FCFLAGS_fc_omp","-fopenmp")
   ctx.env.FCSHLIB_MARKER = [""]
   ctx.env.FCSTLIB_MARKER = [""]
   ctx.start_msg("Check ifort version") 
@@ -104,7 +104,7 @@ def ifort_conf_(ctx):
   if sys.platform.lower()=="darwin":
     ctx.env.LINKFLAGS_fcshlib = ['-dynamiclib']
   ctx.env.append_value('FCFLAGS',ctx.env.mopt)
-  ctx.env.append_value("FCFLAGS_fc_omp","-openmp")
+  ctx.env.append_value("FCFLAGS_fc_omp","-fopenmp")
   ctx.env.FCSHLIB_MARKER = [""]
   ctx.env.FCSTLIB_MARKER = [""]
   

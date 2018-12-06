@@ -29,7 +29,7 @@ def do_icc(ctx):
       mandatory=1,fragment = "#include <stdio.h>\nmain() {fprintf(stderr,\"hello world\");}\n",compile_filename='test.c',features='c cprogram')
   ctx.start_msg("retrieve icc link line")
   ctx.env["CCFLAGS_cc_omp"]=[]
-  ctx.env.append_value("CCFLAGS_cc_omp","-openmp")
+  ctx.env.append_value("CCFLAGS_cc_omp","-fopenmp")
   try:
     #print "%s %s -dryrun -dynamiclib -shared-intel -no-cxxlib dummy.f90"%(ctx.env.FC," ".join(ctx.env.FCFLAGS))
     llgo,llge = ctx.cmd_and_log("%s %s -dryrun -dynamiclib -shared-intel -no-cxxlib dummy.f90"%(ctx.env.CC[0]," ".join(ctx.env.CCFLAGS+ctx.env.CCFLAGS_cc_omp)), output=waflib.Context.BOTH)
