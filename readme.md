@@ -2,6 +2,7 @@
 
 this repo contains few minor patches needed to build plc2.0 with recent Intel compilers.
 Original can be downloaded directly from this link:
+
 http://pla.esac.esa.int/pla/aio/product-action?COSMOLOGY.FILE_ID=COM_Likelihood_Code-v2.0_R2.00.tar.bz2
 
 Or browse to the archive:
@@ -11,11 +12,26 @@ Or browse to the archive:
 - change release to "PR2-2015"
 - download "COM_Likelihood_Code-v2.0_R2.00.tar.bz2" - provides `product-action?COSMOLOGY.FILE_ID=COM_Likelihood_Code-v2.0_R2.00.tar.bz2` providing `plc-2.0` directory after unpacking.
 
+## Patches description
+
+all are *easybuild-compatible*.
+
+* `plc-2.0-fix-missing-bindir.patch` - *Install* step expects `$bindir` in place. If not present, fails. This patch adds check for `$bindir` and creates one if missing.
+* `plc-2.0-fix-openmp-flags.patch` - flag `-openmp` is unknown for compilers we use → replaced with flag `-fopenmp`.
+
+## Known unsolved problems
+
+There are unclear dependencies between configure, build and install step. Some *install* actions are already done before *install* step itself. That breaks easyBuild procedure. This has been so far confirmed for:
+* `$prefix/lib/libclik_mkl.so` - this file is from whatever reason deployed before install step
+* `$prefix/lib/pkgconfig` directory - same.
+
 ## Further reading
 
 - **Installing CosmoMC & the Planck likelihood**, Manuel Trashorras, IFT/UAM-CSIC,march 2017, https://workshops.ift.uam-csic.es/files/208/SoCT%20-%20Installing%20CosmoMC%20and%20the%20Planck%20likelihood.pdf
 
-# readme
+-------------
+
+# Readme from upstream project
 
 (4 July 2015 version)
 
