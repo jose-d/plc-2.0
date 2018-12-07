@@ -1,8 +1,17 @@
 # plc 2.0
 
 this repo contains few minor patches needed to build plc2.0 with recent Intel compilers.
-Original can be downloaded here:
-https://wiki.cosmos.esa.int/planckpla/index.php/CMB_spectrum_%26_Likelihood_Code
+Original can be downloaded directly from this link:
+http://pla.esac.esa.int/pla/aio/product-action?COSMOLOGY.FILE_ID=COM_Likelihood_Code-v2.0_R2.00.tar.bz2
+
+Or browse to the archive:
+- go to: http://pla.esac.esa.int/pla/#home
+- clik on "Cosmology"
+- unselect "Only legacy products"
+- change release to "PR2-2015"
+- download "COM_Likelihood_Code-v2.0_R2.00.tar.bz2"
+
+# readme
 
 (4 July 2015 version)
 
