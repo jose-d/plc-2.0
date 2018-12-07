@@ -11,6 +11,10 @@ Or browse to the archive:
 - change release to "PR2-2015"
 - download "COM_Likelihood_Code-v2.0_R2.00.tar.bz2" - provides `product-action?COSMOLOGY.FILE_ID=COM_Likelihood_Code-v2.0_R2.00.tar.bz2` providing `plc-2.0` directory after unpacking.
 
+## Further reading
+
+- **Installing CosmoMC & the Planck likelihood**, Manuel Trashorras, IFT/UAM-CSIC,march 2017, https://workshops.ift.uam-csic.es/files/208/SoCT%20-%20Installing%20CosmoMC%20and%20the%20Planck%20likelihood.pdf
+
 # readme
 
 (4 July 2015 version)
