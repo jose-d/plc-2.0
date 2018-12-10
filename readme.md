@@ -10,7 +10,7 @@ Or browse to the archive:
 - clik on "Cosmology"
 - unselect "Only legacy products"
 - change release to "PR2-2015"
-- download "COM_Likelihood_Code-v2.0_R2.00.tar.bz2" - provides `product-action?COSMOLOGY.FILE_ID=COM_Likelihood_Code-v2.0_R2.00.tar.bz2` providing `plc-2.0` directory after unpacking.
+
 
 ## Patches description
 
