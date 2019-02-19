@@ -297,7 +297,7 @@ module bflike_smw
   integer,save :: ntemp ,nq ,nu ,ntot ,nqu ,lmax ,lswitch ,ndata
 
   real(dp) ,allocatable ,dimension(:,:) ,save :: clnorm ,Tvec ,Qvec ,Uvec ,dt ,auxdt ,cls
-  real(dp) ,allocatable ,dimension(:) ,save   :: reflike ,pl,plm,f1,f2
+  real(dp) ,allocatable ,dimension(:) ,save   :: reflike, pl, plm, f1, f2, plm_A, plm_B, plm_C
   real(dp) ,allocatable ,target               :: S(:,:)
 
   type(triangular_matrix) ,save               :: cos1 ,cos2 ,sin1 ,sin2 ,ncov 
@@ -371,7 +371,8 @@ contains
     call sin2%alloc(ntot)
 
     allocate(cls(2:lmax,6))
-    allocate(pl(1:lmax),plm(1:lmax))
+! here i included the max size of PL.. JDV
+    allocate(pl(1:999999),plm(1:999999),plm_A(1:999999),plm_B(1:999999),plm_C(1:999999))
     allocate(f1(2:lmax),f2(2:lmax))
 
     call precompute_rotation_angle()
@@ -583,7 +584,9 @@ contains
     allocate(reflike(ndata))
 
     allocate(cls(2:lmax,6))
-    allocate(pl(1:lmax),plm(1:lmax))
+!JDV    allocate(pl(1:lmax),plm(1:lmax))
+!    allocate(pl(1:999999),plm(1:999999))
+    allocate(pl(1:999999),plm(1:999999),plm_A(1:999999),plm_B(1:999999),plm_C(1:999999))
     allocate(f1(2:lmax),f2(2:lmax))
     allocate(auxdt(ntot,ndata))
 
@@ -1040,6 +1043,28 @@ contains
     end if
 
   end subroutine get_tt_cov
+    
+  function fnc_plm_a(l,plm_minus_one,plm_minus_two,cz) result(plm)
+
+    real(dp) ,intent(in) :: plm_minus_one,plm_minus_two,cz
+    real(dp)             :: plm
+    integer ,intent(in)  :: l
+
+    plm = (cz*(2*l -1)*plm_minus_one - (l+1)*plm_minus_two)/(l - 2)
+  
+  end function fnc_plm_a
+
+
+  function fnc_plm_b(l,plm_minus_one,plm_minus_two,cz) result(plm)
+
+    real(dp) ,intent(in) :: plm_minus_one,plm_minus_two,cz
+    real(dp)             :: plm
+    integer ,intent(in)  :: l
+
+    plm = (cz*(2*l -1)*plm_minus_one - (l-1)*plm_minus_two)/(l)
+
+  end function fnc_plm_b
+  
 
   subroutine get_pp_cov(clsin,linf,lsup,cov,project_mondip,symmetrize)
 
@@ -1068,8 +1093,10 @@ contains
           f2(2)  = -12.d0*cz
           do l = 3,lsup
              plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l -2)
-             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ &
-                  (2*l+4)*cz*plm(l-1)
+          enddo
+
+          do l = 3,lsup
+             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ (2*l+4)*cz*plm(l-1)
              f2(l) = 4.d0*(-(l-1)*cz*plm(l) +(l+2)*plm(l-1))
           enddo
           qq = sum(cls(linf:lsup,smwEE)*f1(linf:lsup) -cls(linf:lsup,smwBB)*f2(linf:lsup))
@@ -1096,8 +1123,9 @@ contains
           f2(2)  = -12.d0*cz
           do l = 3,lsup
              plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l -2)
-             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ &
-                  (2*l+4)*cz*plm(l-1)
+          enddo
+          do l = 3,lsup
+             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ (2*l+4)*cz*plm(l-1)
              f2(l) = 4.d0*(-(l-1)*cz*plm(l) +(l+2)*plm(l-1))
           enddo
           qq = sum(cls(linf:lsup,smwEE)*f1(linf:lsup) -cls(linf:lsup,smwBB)*f2(linf:lsup))
@@ -1126,8 +1154,9 @@ contains
           f2(2)  = -12.d0*cz
           do l = 3,lsup
              plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l -2)
-             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ &
-                  (2*l+4)*cz*plm(l-1)
+          enddo
+          do l = 3,lsup
+             f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ (2*l+4)*cz*plm(l-1)
              f2(l) = 4.d0*(-(l-1)*cz*plm(l) +(l+2)*plm(l-1))
           enddo
           qq = sum(cls(linf:lsup,smwEE)*f1(linf:lsup) -cls(linf:lsup,smwBB)*f2(linf:lsup))
@@ -1347,8 +1376,8 @@ contains
     real(dp) ,intent(inout)       :: NCM(:,:)
     logical ,intent(in) ,optional :: project_mondip
 
-    integer  :: i ,j ,l ,iu ,iq ,ju ,jq
-    real(dp) :: tt ,qq ,uu ,tq ,tu ,qu ,cz ,c1c2 ,s1s2 ,c1s2 ,s1c2 ,ct0 ,ct1
+    integer  :: i ,j ,l ,iu ,iq ,ju ,jq, pl_base, pl_A_base, pl_B_base, pl_C_base, j1, j2, j3, j4, l1, l2, l3, l4
+    real(dp) :: tt ,qq ,uu ,tq ,tu ,qu ,cz ,c1c2 ,s1s2 ,c1s2 ,s1c2 ,ct0 ,ct1, cz1, cz2, cz3
 
     ct0 = 0._dp
     ct1 = 0._dp
@@ -1363,48 +1392,88 @@ contains
     cls(2:lsup,:) =clsin(2:lsup,:)*clnorm(2:lsup,:)
 
     do i=1,ntemp
-! TT 
+! HOTSPOT - here we eat too much CPU
+
+       !reset the variables used in parallel sections here..:
+       pl_base = 0
+       pl_A_base = 0
+       pl_B_base = 0
+
+       !$OMP PARALLEL SECTIONS
+
+       !$OMP SECTION
+       ! TT - pregen plm:
+       !DIR$ NOUNROLL
+       do j1=i,ntemp
+          cz1 = sum(Tvec(:,j1)*Tvec(:,i))
+          pl(pl_base+1) = cz1
+          pl(pl_base+2) = 1.5d0*cz1*cz1 -.5d0
+          do l1 = 3,lsup
+             pl(l1+pl_base) =( cz1*(2*l1-1)*pl(l1+pl_base-1)-(l1-1)*pl(l1+pl_base-2))/l1
+          enddo
+          pl_base = pl_base + lsup
+       enddo
+
+       !$OMP SECTION
+       ! QT - pregen plm:
+       !DIR$ NOUNROLL
+       do j2=1,nq
+          cz2 = sum(Qvec(:,j2)*Tvec(:,i))
+          plm_A(pl_A_base+1) = 0.d0
+          plm_A(pl_A_base+2) = 3.d0*(1.d0 -cz2*cz2)
+          do l2 = 3,lsup
+             plm_A(l2+pl_A_base) = (cz2*(2*l2-1)*plm_A(l2+pl_A_base-1)-(l2+1)*plm_A(l2+pl_A_base-2))/(l2-2)
+          enddo
+          pl_A_base = pl_A_base + lsup
+       enddo
+
+       !$OMP SECTION
+       ! UT - pregen plm:
+       !DIR$ NOUNROLL
+       do j3=1,nu
+          cz3 = sum(Uvec(:,j3)*Tvec(:,i))
+          plm_B(pl_B_base+1) = 0.d0
+          plm_B(pl_B_base+2) = 3.d0*(1.d0 -cz3*cz3)
+          do l3 = 3,lsup
+             plm_B(l3+pl_B_base) = (cz3*(2*l3-1)*plm_B(l3+pl_B_base-1)-(l3+1)*plm_B(l3+pl_B_base-2))/(l3-2)
+          enddo
+          pl_B_base = pl_B_base + lsup
+       enddo
+
+       !$OMP END PARALLEL SECTIONS
+
+
+       ! TT - fill data into NCM
+       pl_base = 0
        do j=i,ntemp
-          cz = sum(Tvec(:,j)*Tvec(:,i))
-          pl(1) = cz
-          pl(2) = 1.5d0*cz*cz -.5d0
-          do l = 3,lsup
-             pl(l) =(cz*(2*l -1)*pl(l-1) -(l-1)*pl(l-2))/l
-          enddo
-          tt = sum(cls(linf:lsup,smwTT)*pl(linf:lsup)) 
-          NCM(j,i) = NCM(j,i) +tt +ct0 +pl(1)*ct1
+         tt = sum(cls(linf:lsup,smwTT)*pl(pl_base+linf:pl_base+lsup)) 
+         NCM(j,i) = NCM(j,i) +tt +ct0 +pl(pl_base+1)*ct1
+         pl_base = pl_base + lsup
        enddo
 
-! QT
+       ! QT - fill data into NCM
+       pl_A_base = 0
        do j=1,nq
-          cz = sum(Qvec(:,j)*Tvec(:,i))
-          plm(1) = 0.d0
-          plm(2) = 3.d0*(1.d0 -cz*cz)
-          do l = 3,lsup
-             plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l-2)
-          enddo
-          tq = -sum(cls(linf:lsup,smwTE)*plm(linf:lsup))
-          tu = -sum(cls(linf:lsup,smwTB)*plm(linf:lsup))
+          ! tq,tu - to be parallelized too?? -> IMO yes..
+          tq = -sum(cls(linf:lsup,smwTE)*plm_A(pl_A_base+linf:pl_A_base+lsup))
+          tu = -sum(cls(linf:lsup,smwTB)*plm_A(pl_A_base+linf:pl_A_base+lsup))
 
-          jq = j +ntemp
+          jq = j + ntemp
 
-          NCM(jq,i) = NCM(jq,i) +tq*cos1%column(i)%row(jq) +tu*sin1%column(i)%row(jq)
+          NCM(jq,i) = NCM(jq,i) +tq*cos1%column(i)%row(jq) +tu*sin1%column(i)%row(jq) !this could be splitted into two FP operations IMO..
+          pl_A_base = pl_A_base + lsup
        enddo
 
-!UT
+       ! UT - fill data into NCM
+       pl_B_base = 0
        do j=1,nu
-          cz = sum(Uvec(:,j)*Tvec(:,i))
-          plm(1) = 0.d0
-          plm(2) = 3.d0*(1.d0 -cz*cz)
-          do l = 3,lsup
-             plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l-2)
-          enddo
-          tq = -sum(cls(linf:lsup,smwTE)*plm(linf:lsup))
-          tu = -sum(cls(linf:lsup,smwTB)*plm(linf:lsup))
+          tq = -sum(cls(linf:lsup,smwTE)*plm_B(pl_B_base+linf:pl_B_base+lsup))
+          tu = -sum(cls(linf:lsup,smwTB)*plm_B(pl_B_base+linf:pl_B_base+lsup))
 
           ju = j +ntemp +nq
 
           NCM(ju,i) = NCM(ju,i) -tq*sin1%column(i)%row(ju) +tu*cos1%column(i)%row(ju)
+          pl_B_base = pl_B_base + lsup
        enddo
 
     end do
@@ -1450,6 +1519,8 @@ contains
 
           do l = 3,lsup
              plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l -2)
+          enddo
+          do l = 3,lsup
              f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ &
                   (2*l+4)*cz*plm(l-1)
              f2(l) = 4.d0*(-(l-1)*cz*plm(l) +(l+2)*plm(l-1))
@@ -1481,6 +1552,8 @@ contains
           f2(2)  = -12.d0*cz
           do l = 3,lsup
              plm(l) =(cz*(2*l -1)*plm(l-1) -(l+1)*plm(l-2))/(l -2)
+          enddo
+          do l = 3,lsup
              f1(l) =-(2*l-8 +l*(l-1)*(1.d0 -cz*cz))*plm(l)+ &
                   (2*l+4)*cz*plm(l-1)
              f2(l) = 4.d0*(-(l-1)*cz*plm(l) +(l+2)*plm(l-1))
