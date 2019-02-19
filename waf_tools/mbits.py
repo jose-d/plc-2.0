@@ -22,7 +22,9 @@ def configure(ctx):
     if ctx.options.m32:    
       mopt += ["-arch", "i386"]    
   else:
-    mopt = ["-m64"]
+#    mopt = ["-m64","-xCORE-AVX512","-qopt-zmm-usage=high","-g", "-O3","-no-prec-div"]
+    mopt = ["-m64","-xCORE-AVX512","-qopt-zmm-usage=high","-g", "-O3"]
+    #mopt = ["-m64" ]
     if ctx.options.m32:
       mopt = ["-m32"]
       
