@@ -285,6 +285,7 @@ end module bflike_utils_smw
 
 module bflike_smw
 
+  use omp_lib ! to be able to manipulate with nested OMP levels
   use healpix_types
   use bflike_utils_smw
   use fitstools_smw , only : read_dbintab ,printerror 
@@ -692,6 +693,7 @@ contains
        stop
     end if
 
+    print*,'ndata :',ndata
     do i = 1,ndata
        reflike(i) = sum(dt(:,i)*auxdt(:,i))
     end do
@@ -767,6 +769,8 @@ contains
     do i = 1,nq
 !QQ
        iq = i+ntemp
+
+       !_DIR$ SIMD
        do j = i,nq
           call get_rotation_angle(QVec(:,j),QVec(:,i),a1,a2)
           jq = j+ntemp
@@ -778,6 +782,7 @@ contains
 
        end do
 
+       !_DIR$ SIMD
        do j=1,nu
           call get_rotation_angle(UVec(:,j),QVec(:,i),a1,a2)
 
@@ -1398,10 +1403,13 @@ contains
     real(dp)    ,allocatable    :: pl_vector (:)       !new vector
     real(dp)    ,allocatable    :: f1_vector (:)
     real(dp)    ,allocatable    :: f2_vector (:)
+    real(dp)    ,allocatable    :: ncm_vector (:)
     
 
     integer  :: i ,j ,l ,iu ,iq ,ju ,jq
-    real(dp) :: tt ,qq ,uu ,tq ,tu ,qu ,cz ,c1c2 ,s1s2 ,c1s2 ,s1c2 ,ct0 ,ct1
+    integer  :: omp_num_threads_bak,omp_parallel_section_pl,omp_main_loop_pl,omp_inner_loop_pl
+    LOGICAL  :: omp_nested_bak
+    real(dp) :: tt ,qq ,uu ,tq ,tu ,qu ,cz ,c1c2 ,s1s2 ,c1s2 ,s1c2 ,ct0 ,ct1, res
 
     ct0 = 0._dp
     ct1 = 0._dp
@@ -1415,16 +1423,46 @@ contains
 
     cls(2:lsup,:) =clsin(2:lsup,:)*clnorm(2:lsup,:)
 
-    !$omp parallel do private(cz,pl_vector,tt,tq,tu,jq,ju,j,l) shared(NCM)
+    print *, "Before: max_act_lev=", omp_get_max_active_levels(), &
+      ", num_thds=", omp_get_num_threads(), &
+      ", max_thds=", omp_get_max_threads(), &
+      ", get_nested=", omp_get_nested()
+
+    omp_num_threads_bak = omp_get_max_threads()
+    omp_nested_bak = omp_get_nested()
+
+    ! this should be 3 as there are three sections(?)
+    ! from obvious reasons, 1 is minimum..
+    omp_parallel_section_pl = MIN(3,omp_num_threads_bak)
+    omp_main_loop_pl =  MAX(FLOOR(SQRT(REAL(omp_num_threads_bak / omp_parallel_section_pl))),1)
+    print *, "omp_main_loop_pl=", omp_main_loop_pl
+    omp_inner_loop_pl = MAX((omp_num_threads_bak/omp_parallel_section_pl)/omp_main_loop_pl,1)
+    print *, "omp_inner_loop_pl=", omp_main_loop_pl
+
+    call omp_set_nested(.true.)
+    call omp_set_max_active_levels(3) ! we have 3 levels of paralelism
+    !call omp_set_dynamic(.false.)
+    call omp_set_num_threads(omp_main_loop_pl)
+
+    ! HOTSPOT
+
+    !$omp parallel do shared(NCM)
     do i=1,ntemp
-! HOTSPOT - here we eat too much CPU
 
-       !allocate(pl_vector(lsup)) !alocate memory - we use this instead pl and plm global variables..
+       call omp_set_num_threads(omp_parallel_section_pl)
 
-       ! TT
-       !pl_vector(:) = 0d0
+       !$omp parallel sections private(ncm_vector) shared(NCM)
 
-       !$omp parallel do private(cz,pl_vector,tt,j,l) shared(NCM)
+       ! TT =====================================
+       
+       !$omp section
+
+       allocate(ncm_vector(ntemp))
+       ncm_vector(:)=0
+
+       call omp_set_num_threads(omp_inner_loop_pl)
+
+       !$omp parallel do private(cz,tt,pl_vector) reduction(+:ncm_vector)
        do j=i,ntemp
           cz = sum(Tvec(:,j)*Tvec(:,i))
           allocate(pl_vector(lsup))
@@ -1438,15 +1476,27 @@ contains
           tt = sum(cls(linf:lsup,smwTT)*pl_vector(linf:lsup)) 
           deallocate (pl_vector)
 
-          ! shared variable NCM: i - in main (parallell cycle) so independent..
-          !                      j - from i(=1..ntemp) untill ntemp
-          NCM(j,i) = NCM(j,i) + tt + ct0 + cz * ct1
+          ncm_vector(j)=ncm_vector(j)+tt + ct0 + cz * ct1
+       enddo
+       !$omp end parallel do
+
+       !DIR$ SIMD
+       do j=i,ntemp
+         NCM(j,i)=NCM(j,i) + ncm_vector(j)
        enddo
 
-       ! QT
-       !pl_vector(:) = 0d0
-       !pl_vector(1) = 0.d0
-       !$omp parallel do private(cz,pl_vector,tq,tu,jq,j,l) shared(NCM)
+       deallocate (ncm_vector)
+
+       ! QT ========================================
+
+       !$omp section
+
+       allocate(ncm_vector(nq))
+       ncm_vector(:)=0
+
+       call omp_set_num_threads(omp_inner_loop_pl)
+
+       !$omp parallel do private(cz,tq,tu,jq,pl_vector) reduction(+:ncm_vector)
        do j=1,nq
           cz = sum(Qvec(:,j)*Tvec(:,i))
           allocate(pl_vector(lsup))
@@ -1462,15 +1512,28 @@ contains
           deallocate (pl_vector)
           jq = j +ntemp
 
-          ! shared variable NCM: i - in main (parallel loop) so independent..
-          !                      jq - from (ntemp+1) untill (ntemp+nq)
-          NCM(jq,i) = NCM(jq,i) +tq*cos1%column(i)%row(jq)+tu*sin1%column(i)%row(jq)
+          ncm_vector(j) = ncm_vector(j) + tq*cos1%column(i)%row(jq)+tu*sin1%column(i)%row(jq)
+       enddo
+       !$omp end parallel do
+
+       !DIR$ SIMD
+       do j=1,nq
+         jq = j +ntemp
+         NCM(jq,i) = NCM(jq,i) + ncm_vector(j)
        enddo
 
-       ! UT ! the biggest one??
-       !pl_vector(:) = 0d0
-       !pl_vector(1) = 0.d0
-       !$omp parallel do private(cz,pl_vector,tq,tu,ju,j,l) shared(NCM)
+       deallocate (ncm_vector)
+
+       ! UT ===============================================
+
+       !$omp section
+
+       allocate(ncm_vector(nu))
+       ncm_vector(:)=0
+
+       call omp_set_num_threads(omp_inner_loop_pl)
+
+       !$omp parallel do private(cz,tq,tu,ju,pl_vector) reduction(-:ncm_vector)
        do j=1,nu
           cz = sum(Uvec(:,j)*Tvec(:,i))
           allocate(pl_vector(lsup))
@@ -1486,14 +1549,24 @@ contains
           deallocate (pl_vector)
           ju = j +ntemp +nq
 
-          ! shared variable NCM: i - main parallel loop so independent
-          !                      ju - from (ntemp+nq+1 untill (ntemp+nq+nu)
-          NCM(ju,i) = NCM(ju,i) -tq*sin1%column(i)%row(ju)+tu*cos1%column(i)%row(ju)
+          ncm_vector(j) = ncm_vector(j) - tq*sin1%column(i)%row(ju)+tu*cos1%column(i)%row(ju)
        enddo
+       !$omp end parallel do
 
-       !deallocate (pl_vector)
+       !DIR$ SIMD
+       do j=1,nu
+         ju = j +ntemp +nq
+         NCM(ju,i) = NCM(ju,i) + ncm_vector(j)
+       enddo
+       
+       deallocate (ncm_vector)
+
+       !$omp end parallel sections
 
     end do ! i=1 .. ntemp
+
+    call omp_set_num_threads(omp_num_threads_bak)
+    call omp_set_nested(omp_nested_bak)
     
 
     !$omp parallel do private(cz,pl_vector,f1_vector,f2_vector,qq,uu,qu,jq,iq,ju,c1c2,s1s2,c1s2,s1c2,j,l) shared(NCM)
@@ -1530,6 +1603,7 @@ contains
           s1c2 = sin1%column(iq)%row(jq)*cos2%column(iq)%row(jq)
 
           NCM(jq,iq) = NCM(jq,iq) +qq*c1c2 +uu*s1s2 +qu*(c1s2+s1c2)
+          !todo: just collect terms and do reduction later
 
        end do
 
@@ -1563,6 +1637,7 @@ contains
           s1c2 = sin1%column(iq)%row(ju)*cos2%column(iq)%row(ju)
 
           NCM(ju,iq) = NCM(ju,iq) -qq*s1c2 +uu*c1s2 +qu*(c1c2 -s1s2)
+          !todo: just collect terms and do reduction later
        end do
 
        deallocate (pl_vector)
@@ -1570,20 +1645,21 @@ contains
        deallocate (f2_vector)
 
     end do ! i=1 .. nq
+    !$omp end parallel do
 
-    !_omp parallel do private(cz,pl_vector,f1_vector,f2_vector,qq,uu,qu,ju,iu,c1c2,s1s2,c1s2,s1c2,j,l) shared(NCM)
+    !$omp parallel do private(cz,pl_vector,f1_vector,f2_vector,qq,uu,qu,ju,iu,c1c2,s1s2,c1s2,s1c2,j,l) shared(NCM)
     do i =1,nu
 
-       !allocate(pl_vector(lsup))
-       !allocate(f1_vector(lsup))
-       !allocate(f2_vector(lsup))
+       allocate(pl_vector(lsup))
+       allocate(f1_vector(lsup))
+       allocate(f2_vector(lsup))
 !UU 
-       !$omp parallel do private(cz,pl_vector,f1_vector,f2_vector,qq,uu,qu,ju,iu,c1c2,s1s2,c1s2,s1c2,j,l) shared(NCM)
+       !_omp parallel do private(cz,pl_vector,f1_vector,f2_vector,qq,uu,qu,ju,iu,c1c2,s1s2,c1s2,s1c2,j,l) shared(NCM)
        do j=i,nu
 
-          allocate(pl_vector(lsup))
-          allocate(f1_vector(lsup))
-          allocate(f2_vector(lsup))
+          !allocate(pl_vector(lsup))
+          !allocate(f1_vector(lsup))
+          !allocate(f2_vector(lsup))
 
           cz = sum(Uvec(:,j)*Uvec(:,i))
           pl_vector(1) = 0.d0
@@ -1598,14 +1674,14 @@ contains
              f2_vector(l) = 4.d0*(-(l-1)*cz*pl_vector(l) +(l+2)*pl_vector(l-1))
           enddo
 
-          deallocate (pl_vector)
+          !deallocate (pl_vector)
 
           qq = sum(cls(linf:lsup,smwEE)*f1_vector(linf:lsup) -cls(linf:lsup,smwBB)*f2_vector(linf:lsup))
           uu = sum(cls(linf:lsup,smwBB)*f1_vector(linf:lsup) -cls(linf:lsup,smwEE)*f2_vector(linf:lsup))
           qu = sum((f1_vector(linf:lsup) +f2_vector(linf:lsup))*cls(linf:lsup,smwEB))
 
-          deallocate (f1_vector)
-          deallocate (f2_vector)
+          !deallocate (f1_vector)
+          !deallocate (f2_vector)
 
 
           ju = j+ntemp+nq
@@ -1619,11 +1695,12 @@ contains
           NCM(ju,iu) = NCM(ju,iu) +qq*s1s2 +uu*c1c2 -qu*(c1s2 +s1c2)
        end do
 
-!       deallocate (pl_vector)
-!       deallocate (f1_vector)
-!       deallocate (f2_vector)
+       deallocate (pl_vector)
+       deallocate (f1_vector)
+       deallocate (f2_vector)
 
     end do
+    !$omp end parallel do
 
   end subroutine update_ncvm
 
